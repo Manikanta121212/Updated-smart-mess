@@ -1,210 +1,142 @@
-import React, {useEffect, useState} from 'react'
-import {useNavigate} from 'react-router-dom'
-import './index.css'
+import React, { useState, useEffect } from 'react';
 
 const UsageUpdate = () => {
-  const [entries, setEntries] = useState([])
-  const [groupedItems, setGroupedItems] = useState({})
-  const [usage, setUsage] = useState({})
-  const [remaining, setRemaining] = useState({})
-  const [inputValues, setInputValues] = useState({})
-  const [lastUpdated, setLastUpdated] = useState({item: null, day: null})
-  const navigate = useNavigate()
+  const [usageData, setUsageData] = useState([]);
+  const [formData, setFormData] = useState({
+    name: '',
+    quantity: '',
+    unit: 'kg',
+    date: ''
+  });
 
-  const loadData = () => {
-    const data = JSON.parse(localStorage.getItem('groceryEntries')) || []
-    const storedUsage = JSON.parse(localStorage.getItem('groceryUsage')) || {}
-    const storedRemaining =
-      JSON.parse(localStorage.getItem('groceryRemaining')) || {}
-
-    const grouped = {}
-    data.forEach(({name, quantity, unit, price}) => {
-      if (!grouped[name]) {
-        grouped[name] = {
-          totalQuantity: 0, // Changed from quantity to totalQuantity for clarity
-          unit,
-          price: price || 0,
-          id: `${name}-${Math.random().toString(36).substr(2, 9)}`,
-        }
-      }
-      grouped[name].totalQuantity += parseFloat(quantity)
-    })
-
-    const initialInputValues = {}
-    Object.keys(grouped).forEach(name => {
-      initialInputValues[name] = storedUsage[name]?.days
-        ? storedUsage[name].days.map(val => (val > 0 ? val.toString() : ''))
-        : Array(31).fill('')
-    })
-
-    // Calculate remaining quantities
-    const calculatedRemaining = {}
-    Object.keys(grouped).forEach(name => {
-      const totalUsed =
-        storedUsage[name]?.days?.reduce((sum, val) => sum + val, 0) || 0
-      calculatedRemaining[name] = grouped[name].totalQuantity - totalUsed
-    })
-
-    setEntries(data)
-    setGroupedItems(grouped)
-    setUsage(storedUsage)
-    setRemaining({...storedRemaining, ...calculatedRemaining}) // Merge stored and calculated
-    setInputValues(initialInputValues)
-  }
+  const fetchUsageData = async () => {
+    try {
+      const response = await fetch('http://localhost:5000/usage/all');
+      const data = await response.json();
+      setUsageData(data);
+    } catch (error) {
+      console.error('Error fetching usage data:', error);
+    }
+  };
 
   useEffect(() => {
-    loadData()
+    fetchUsageData();
+  }, []);
 
-    // Listen for storage updates from other tabs/components
-    const handleStorageUpdate = () => {
-      loadData()
-    }
-    window.addEventListener('storage', handleStorageUpdate)
-    return () => window.removeEventListener('storage', handleStorageUpdate)
-  }, [])
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value
+    }));
+  };
 
-  useEffect(() => {
-    localStorage.setItem('groceryRemaining', JSON.stringify(remaining))
-    localStorage.setItem('groceryUsage', JSON.stringify(usage))
-    window.dispatchEvent(new CustomEvent('groceryDataUpdated'))
-  }, [remaining, usage])
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    const { name, quantity, unit, date } = formData;
 
-  const handleInputChange = (name, day, value) => {
-    setInputValues(prev => {
-      const newValues = {...prev}
-      if (!newValues[name]) {
-        newValues[name] = Array(31).fill('')
-      }
-      newValues[name] = [...newValues[name]]
-      newValues[name][day - 1] = value
-      return newValues
-    })
-    setLastUpdated({item: name, day: day - 1})
-  }
-
-  const handleUpdateClick = name => {
-    if (!lastUpdated.item || lastUpdated.item !== name) {
-      alert('Please modify a value before updating')
-      return
+    if (!name || !quantity || !date) {
+      alert('Please fill in all fields.');
+      return;
     }
 
-    const dayIndex = lastUpdated.day
-    const newValue = parseFloat(inputValues[name][dayIndex]) || 0
+    try {
+      const response = await fetch('http://localhost:5000/usage/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData)
+      });
 
-    setUsage(prev => {
-      const newUsage = {...prev}
-      if (!newUsage[name]) {
-        newUsage[name] = {days: Array(31).fill(0)}
+      if (response.ok) {
+        setFormData({ name: '', quantity: '', unit: 'kg', date: '' });
+        fetchUsageData();
       } else {
-        newUsage[name] = {days: [...newUsage[name].days]}
+        const err = await response.json();
+        alert(err.error || 'Error saving usage');
       }
-      newUsage[name].days[dayIndex] = newValue
-      return newUsage
-    })
-
-    const currentRemaining =
-      remaining[name] !== undefined
-        ? parseFloat(remaining[name])
-        : parseFloat(groupedItems[name]?.totalQuantity || 0)
-
-    const previousDayValue = usage[name]?.days[dayIndex] || 0
-    const difference = newValue - previousDayValue
-    const newRemaining = currentRemaining - difference
-
-    if (newRemaining < 0) {
-      alert('This update would make remaining quantity negative')
-      return
+    } catch (error) {
+      console.error('Error submitting usage:', error);
     }
+  };
 
-    setRemaining(prev => ({...prev, [name]: newRemaining}))
-    alert(`Successfully updated ${name} for day ${dayIndex + 1}`)
-    setLastUpdated({item: null, day: null})
-  }
-
-  const calculateAmount = name => {
-    const usedQuantity = (usage[name]?.days || Array(31).fill(0)).reduce(
-      (sum, val) => sum + val,
-      0,
-    )
-    const pricePerUnit = groupedItems[name]?.price || 0
-    return usedQuantity * pricePerUnit
-  }
+  const handleDelete = async (id) => {
+    try {
+      const response = await fetch(`http://localhost:5000/usage/delete/${id}`, {
+        method: 'DELETE'
+      });
+      if (response.ok) {
+        fetchUsageData();
+      } else {
+        alert('Failed to delete entry');
+      }
+    } catch (error) {
+      console.error('Error deleting entry:', error);
+    }
+  };
 
   return (
-    <div className="usage-update">
-      <button className="back-btn" onClick={() => navigate(-1)}>
-        ← Back
-      </button>
-      <h2>Update Grocery Usage</h2>
+    <div className="usage-container">
+      <h2>Usage Update</h2>
 
-      {Object.keys(groupedItems).length === 0 ? (
-        <p>No grocery items available.</p>
-      ) : (
-        <div className="table-container">
-          <table className="usage-table">
-            <thead>
-              <tr>
-                <th>S.No</th>
-                <th>Item Name</th>
-                <th>Total Qty</th>
-                {Array.from({length: 31}, (_, i) => (
-                  <th key={`day-${i}`}>{i + 1}</th>
-                ))}
-                <th>Rate/Unit</th>
-                <th>Amount</th>
-                <th>Action</th>
-                <th>Remaining</th>
-              </tr>
-            </thead>
-            <tbody>
-              {Object.entries(groupedItems).map(
-                ([name, {id, totalQuantity, unit, price}]) => (
-                  <tr key={id}>
-                    <td>{Object.keys(groupedItems).indexOf(name) + 1}</td>
-                    <td>{name}</td>
-                    <td>
-                      {totalQuantity.toFixed(2)} {unit}
-                    </td>
-                    {Array.from({length: 31}, (_, i) => (
-                      <td key={`${id}-day-${i}`}>
-                        <input
-                          type="number"
-                          min="0"
-                          value={inputValues[name] ? inputValues[name][i] : ''}
-                          onChange={e =>
-                            handleInputChange(name, i + 1, e.target.value)
-                          }
-                          className="day-input"
-                          aria-label={`${name} usage on day ${i + 1}`}
-                          onFocus={e => e.target.select()}
-                        />
-                      </td>
-                    ))}
-                    <td>₹{price.toFixed(2)}</td>
-                    <td>₹{calculateAmount(name).toFixed(2)}</td>
-                    <td>
-                      <button
-                        className="update-btn"
-                        onClick={() => handleUpdateClick(name)}
-                        disabled={lastUpdated.item !== name}
-                      >
-                        Update
-                      </button>
-                    </td>
-                    <td>
-                      {remaining[name] !== undefined
-                        ? `${remaining[name].toFixed(2)} ${unit}`
-                        : `${totalQuantity.toFixed(2)} ${unit}`}
-                    </td>
-                  </tr>
-                ),
-              )}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <form onSubmit={handleSubmit} className="usage-form">
+        <input
+          type="text"
+          name="name"
+          placeholder="Item name"
+          value={formData.name}
+          onChange={handleChange}
+        />
+        <input
+          type="number"
+          name="quantity"
+          placeholder="Quantity"
+          value={formData.quantity}
+          onChange={handleChange}
+        />
+        <select
+          name="unit"
+          value={formData.unit}
+          onChange={handleChange}
+        >
+          <option value="kg">kg</option>
+          <option value="litre">litre</option>
+          <option value="pack">pack</option>
+        </select>
+        <input
+          type="date"
+          name="date"
+          value={formData.date}
+          onChange={handleChange}
+        />
+        <button type="submit">Save Usage</button>
+      </form>
+
+      <table className="usage-table">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Item</th>
+            <th>Quantity</th>
+            <th>Unit</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {usageData.map((item) => (
+            <tr key={item.id}>
+              <td>{item.date}</td>
+              <td>{item.name}</td>
+              <td>{item.quantity}</td>
+              <td>{item.unit}</td>
+              <td>
+                <button onClick={() => handleDelete(item.id)}>Delete</button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
-  )
-}
+  );
+};
 
-export default UsageUpdate
+export default UsageUpdate;

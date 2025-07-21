@@ -2,21 +2,49 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db');
 
-// Add usage
-router.post('/', (req, res) => {
-  const { itemName, usedQuantity, unit, date } = req.body;
-  const query = `INSERT INTO usage (itemName, usedQuantity, unit, date) VALUES (?, ?, ?, ?)`;
-  db.run(query, [itemName, usedQuantity, unit, date], function (err) {
+// Get usage for all items
+router.get('/', (req, res) => {
+  const sql = `
+    SELECT grocery_name, day, quantity_used 
+    FROM usage
+    ORDER BY grocery_name, day
+  `;
+  db.all(sql, [], (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
-    res.json({ id: this.lastID });
+
+    const usageMap = {};
+    rows.forEach(row => {
+      if (!usageMap[row.grocery_name]) {
+        usageMap[row.grocery_name] = Array(31).fill(0);
+      }
+      usageMap[row.grocery_name][row.day - 1] = row.quantity_used;
+    });
+
+    res.json(usageMap);
   });
 });
 
-// Get all usage
-router.get('/', (req, res) => {
-  db.all(`SELECT * FROM usage`, [], (err, rows) => {
+// Update or insert usage
+router.post('/', (req, res) => {
+  const { name, day, quantity } = req.body;
+
+  const checkSql = `SELECT * FROM usage WHERE grocery_name = ? AND day = ?`;
+  db.get(checkSql, [name, day], (err, row) => {
     if (err) return res.status(500).json({ error: err.message });
-    res.json(rows);
+
+    if (row) {
+      const updateSql = `UPDATE usage SET quantity_used = ? WHERE grocery_name = ? AND day = ?`;
+      db.run(updateSql, [quantity, name, day], function (err) {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ message: 'Updated successfully' });
+      });
+    } else {
+      const insertSql = `INSERT INTO usage (grocery_name, day, quantity_used) VALUES (?, ?, ?)`;
+      db.run(insertSql, [name, day, quantity], function (err) {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ message: 'Inserted successfully' });
+      });
+    }
   });
 });
 
