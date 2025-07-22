@@ -1,8 +1,21 @@
-import axios from 'axios';
+import axios from 'axios'
 
-const BASE_URL = 'http://localhost:5000/api/groceries';
+const API_URL = 'http://localhost:5000/api/groceries'
 
-export const getGroceries = () => axios.get(BASE_URL);
-export const addGrocery = (data) => axios.post(BASE_URL, data);
-export const updateGrocery = (id, data) => axios.put(`${BASE_URL}/${id}`, data);
-export const deleteGrocery = (id) => axios.delete(`${BASE_URL}/${id}`);
+export const getGroceries = async () => {
+  try {
+    const response = await axios.get(API_URL)
+    return response.data
+  } catch (error) {
+    throw error.response ? error.response.data : {message: 'Network Error'}
+  }
+}
+
+export const addGrocery = async groceryData => {
+  try {
+    const response = await axios.post(API_URL, groceryData)
+    return response.data
+  } catch (error) {
+    throw error.response ? error.response.data : {message: 'Network Error'}
+  }
+}

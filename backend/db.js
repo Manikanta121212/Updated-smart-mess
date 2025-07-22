@@ -1,15 +1,15 @@
-const sqlite3 = require('sqlite3').verbose();
-const path = require('path');
+const sqlite3 = require('sqlite3').verbose()
+const path = require('path')
 
 // Connect to SQLite database (will create file if not exists)
-const dbPath = path.resolve(__dirname, 'mess.db');
-const db = new sqlite3.Database(dbPath, (err) => {
+const dbPath = path.resolve(__dirname, 'mess.db')
+const db = new sqlite3.Database(dbPath, err => {
   if (err) {
-    console.error('Error opening database:', err.message);
+    console.error('Error opening database:', err.message)
   } else {
-    console.log('Connected to SQLite database');
+    console.log('Connected to SQLite database')
   }
-});
+})
 
 // Create groceries table
 db.serialize(() => {
@@ -23,7 +23,7 @@ db.serialize(() => {
       total_cost REAL NOT NULL,
       date TEXT NOT NULL
     )
-  `);
+  `)
 
   db.run(`
     CREATE TABLE IF NOT EXISTS usage (
@@ -33,7 +33,7 @@ db.serialize(() => {
       unit TEXT NOT NULL,
       date TEXT NOT NULL
     )
-  `);
+  `)
 
   db.run(`
     CREATE TABLE IF NOT EXISTS remaining (
@@ -41,14 +41,14 @@ db.serialize(() => {
       remaining_quantity REAL NOT NULL,
       unit TEXT NOT NULL
     )
-  `);
+  `)
 
   db.run(`
     CREATE TABLE IF NOT EXISTS students (
       roll_number TEXT PRIMARY KEY,
       name TEXT NOT NULL
     )
-  `);
+  `)
 
   db.run(`
     CREATE TABLE IF NOT EXISTS absentees (
@@ -57,7 +57,7 @@ db.serialize(() => {
       from_date TEXT NOT NULL,
       to_date TEXT NOT NULL
     )
-  `);
-});
+  `)
+})
 
-module.exports = db;
+module.exports = db
